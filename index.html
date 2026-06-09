@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>임준출육 산모수첩 V7</title>
+<style>
+body{margin:0;font-family:sans-serif;background:#f6efe7;color:#5a4a3f}
+.header{background:#e8d9c7;padding:16px;text-align:center;position:sticky;top:0}
+.layout{display:flex;height:calc(100vh - 110px)}
+.left{width:220px;background:#fff;padding:10px;border-right:1px solid #ddd;overflow:auto}
+.middle{width:320px;background:#faf7f2;padding:10px;border-right:1px solid #ddd;overflow:auto}
+.right{flex:1;padding:15px;overflow:auto}
+.btn{width:100%;padding:12px;margin:5px 0;border:none;border-radius:12px;background:#efe2d3;cursor:pointer;text-align:left}
+.card{background:#fff;border-radius:14px;padding:12px;margin-bottom:10px}
+.item{background:#fff;border:none;border-radius:10px;padding:10px;margin:6px 0;width:100%;text-align:left;cursor:pointer}
+input,textarea,select{width:100%;box-sizing:border-box;padding:8px;margin:4px 0;border:1px solid #ddd;border-radius:8px}
+img{max-width:180px;border-radius:10px;margin:4px;cursor:pointer}
+.small{font-size:13px;color:#666}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7)}
+.modal img{max-width:90%;max-height:90%;display:block;margin:2% auto}
+@media(max-width:768px){.layout{flex-direction:column;height:auto}.left,.middle{width:auto}}
+</style>
+</head>
+<body>
+<div class="header">
+<h2>🧸📔 임준출육 산모수첩</h2>
+<div>오늘의 기록은 언젠가 우리 아기에게 들려줄 소중한 추억이 됩니다. 🤎</div>
+<div id="summary"></div>
+</div>
+
+<div class="layout">
+<div class="left" id="cats"></div>
+
+<div class="middle">
+<div class="card">
+<button class="btn" onclick="addEntry()">➕ 기록 추가</button>
+<input id="search" placeholder="제목 검색" oninput="renderList()">
+</div>
+<div id="currentCategory" class="card"><b>🏠 홈</b></div><div id="list"></div>
+</div>
+
+<div class="right">
+<div class="card">
+태명 <input id="baby">
+출산예정일 <input type="date" id="due">
+<div id="preg"></div>
+</div>
+
+<div id="detail" class="card">기록을 선택해주세요 🧸</div>
+
+<div class="card">
+<h3>📷 전체 사진</h3>
+<div id="gallery"></div>
+</div>
+
+<div class="card">
+<h3>💾 산모수첩 백업 / 복원</h3>
+<button class="btn" onclick="backup()">💾 산모수첩 백업하기</button>
+<input type="file" id="restore">
+</div>
+
+<div class="card small">
+🤎 모든 내용은 현재 사용 중인 브라우저에 자동 저장됩니다.<br>
+📌 다른 기기 또는 다른 브라우저에서 접속하거나 브라우저 데이터를 삭제할 경우 저장된 내용이 유지되지 않을 수 있습니다.<br>
+💾 중요한 기록은 산모수첩 백업하기 기능을 이용하여 별도 보관하시기 바랍니다.
+<hr>
+출처 표기와 원문 링크를 함께 제공하는 경우에 한하여 비영리 목적의 일부 인용 및 공유를 허용합니다.<br><br>
+단, 운영자 또는 작성자의 사전 동의 없는 게시물 전체 복제, 캡처본 배포, 무단 전재, 재배포, 상업적 이용 및 재가공은 금지합니다.<br><br>
+© IMJUNCHULYUK. All content is protected by copyright.
+</div>
+</div>
+</div>
+
+<div class="modal" id="modal" onclick="this.style.display='none'"><img id="modalImg"></div>
+
+<script>
+const categories=["🏠 홈","🧸 임신준비","🤍 임신확인","🩺 병원방문","💉 검사결과","📷 초음파앨범","❤️ 태동기록","🎒 출산준비","🍼 육아일기","💌 우리아기에게"];
+let current="🏠 홈", currentIdx=null;
+
+function db(){return JSON.parse(localStorage.getItem("imjun_v7")||"{}")}
+function save(d){localStorage.setItem("imjun_v7",JSON.stringify(d));updateSummary();}
+
+categories.forEach(c=>{
+ let b=document.createElement("button");
+ b.className="btn"; b.textContent=c;
+ b.onclick=()=>{
+   if(c==="🏠 홈"){showHome(); return;}
+   current=c; currentIdx=null; document.getElementById('currentCategory').innerHTML='<b>'+c+'</b>'; renderList();
+ };
+ cats.appendChild(b);
+});
+
+function showHome(){
+ document.getElementById('currentCategory').innerHTML='<b>🏠 홈</b>';
+ let all=Object.values(db()).flat();
+ let recent=all.slice(0,5).map(r=>`<li>${r.date||''} - ${r.title||''}</li>`).join('');
+ detail.innerHTML=`<h3>🏠 홈</h3>
+ <p>🤰 ${preg.innerHTML||'출산예정일을 입력해주세요'}</p>
+ <p>📝 총 기록 ${all.length}개</p>
+ <p>📷 총 사진 ${all.reduce((n,e)=>n+(e.photos?e.photos.length:0),0)}장</p>
+ <h4>최근 기록</h4><ul>${recent||'<li>기록 없음</li>'}</ul>`;
+ list.innerHTML='';
+}
+
+function addEntry(){
+ let d=db(); d[current]=d[current]||[];
+ d[current].unshift({date:new Date().toISOString().slice(0,10),title:"새 기록",content:"",photos:[]});
+ save(d); renderList();
+}
+
+function renderList(){
+ document.getElementById('currentCategory').innerHTML='<b>'+current+'</b>';
+ let arr=(db()[current]||[]);
+ let q=(search.value||"").toLowerCase();
+ list.innerHTML="";
+ arr.forEach((e,i)=>{
+  if(q && !(e.title||"").toLowerCase().includes(q)) return;
+  let b=document.createElement("button");
+  b.className="item";
+  b.innerHTML=`📅 ${e.date}<br><b>${e.title}</b>`;
+  b.onclick=()=>showDetail(i);
+  list.appendChild(b);
+ });
+}
+
+function showDetail(i){
+ currentIdx=i;
+ let e=db()[current][i];
+ let imgs=(e.photos||[]).map(p=>`<img src="${p}" onclick="zoom('${p}')">`).join("");
+ detail.innerHTML=`
+ <h3>${current}</h3>
+ 날짜<input type="date" value="${e.date}" onchange="upd('date',this.value)">
+ 제목<input value="${e.title}" onchange="upd('title',this.value)">
+ 내용<textarea onchange="upd('content',this.value)">${e.content}</textarea>
+ 사진<input type="file" multiple onchange="upload(event)">
+ ${imgs}<br><button class="btn" onclick="delCurrent()">🗑 삭제</button>`;
+}
+
+function upd(f,v){let d=db(); d[current][currentIdx][f]=v; save(d); renderList();}
+function delCurrent(){let d=db(); d[current].splice(currentIdx,1); save(d); detail.innerHTML="기록을 선택해주세요 🧸"; renderList();}
+
+function upload(ev){
+ let files=[...ev.target.files]; let d=db(); let p=files.length;
+ files.forEach(f=>{
+  let r=new FileReader();
+  r.onload=()=>{d[current][currentIdx].photos.push(r.result); if(--p===0){save(d); showDetail(currentIdx); renderGallery();}};
+  r.readAsDataURL(f);
+ });
+}
+
+function renderGallery(){
+ gallery.innerHTML="";
+ Object.values(db()).flat().forEach(e=>(e.photos||[]).forEach(p=>{
+  let img=document.createElement("img"); img.src=p; img.onclick=()=>zoom(p); gallery.appendChild(img);
+ }));
+}
+
+function zoom(src){modal.style.display='block'; modalImg.src=src;}
+
+baby.value=localStorage.getItem("baby_v7")||"";
+baby.oninput=()=>localStorage.setItem("baby_v7",baby.value);
+
+due.value=localStorage.getItem("due_v7")||"";
+due.oninput=()=>{localStorage.setItem("due_v7",due.value); calcPreg();}
+
+function calcPreg(){
+ if(!due.value){preg.innerHTML=""; return;}
+ let dueDate=new Date(due.value);
+ let start=new Date(dueDate); start.setDate(start.getDate()-280);
+ let diff=Math.floor((new Date()-start)/86400000);
+ let w=Math.floor(diff/7), d=diff%7;
+ let dd=Math.ceil((dueDate-new Date())/86400000);
+ preg.innerHTML=`현재 ${w}주 ${d}일 · D-${dd}`;
+}
+calcPreg();
+
+function updateSummary(){
+ let all=Object.values(db()).flat();
+ let photos=all.reduce((n,e)=>n+(e.photos?e.photos.length:0),0);
+ summary.innerHTML=`📝 기록 ${all.length}개 | 📷 사진 ${photos}장`;
+}
+updateSummary();
+
+function backup(){
+ let blob=new Blob([JSON.stringify(localStorage)],{type:'application/json'});
+ let a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);
+ a.download='imjunchulyuk_backup.json';
+ a.click();
+}
+
+restore.onchange=e=>{
+ let f=e.target.files[0]; if(!f) return;
+ let r=new FileReader();
+ r.onload=()=>{
+  let data=JSON.parse(r.result);
+  Object.keys(data).forEach(k=>localStorage.setItem(k,data[k]));
+  alert('복원 완료');
+  location.reload();
+ };
+ r.readAsText(f);
+}
+
+showHome();
+renderGallery();
+</script>
+</body>
+</html>
